@@ -162,16 +162,22 @@ function createToolLengthSetRoutine(settings, toolOffsets = { x: 0, y: 0, z: 0 }
   `.trim();
 }
 
+// Helper: Check if a tool number is a manual tool (no RCS pocket)
+function isManualTool(toolNumber, settings) {
+  return toolNumber > settings.numberOfTools;
+}
+
 // Helper: Tool unload routine
-function createToolUnload(settings, targetTool) {
-  const messageCode = settings.autoSwap ? 'PLUGIN_RCS:UNLOAD_MESSAGE' : 'PLUGIN_RCS:UNLOAD_MESSAGE_MANUAL';
+function createToolUnload(settings, currentTool, targetTool) {
+  const useRCS = settings.autoSwap && !isManualTool(currentTool, settings);
+  const messageCode = useRCS ? 'PLUGIN_RCS:UNLOAD_MESSAGE' : 'PLUGIN_RCS:UNLOAD_MESSAGE_MANUAL';
   const needsPause = settings.pauseBeforeUnload;
   const confirmationLines = needsPause ? `
     G4 P0
     (MSG, ${messageCode})
     M0` : '';
 
-  if (settings.autoSwap) {
+  if (useRCS) {
     // RapidChangeSolo ON
     const pauseSequence = needsPause ? `
       G53 G0 X${settings.parking.x} Y${settings.parking.y}
@@ -221,8 +227,9 @@ function createToolUnload(settings, targetTool) {
 
 // Helper: Tool load routine
 function createToolLoad(settings, toolNumber, hasUnload) {
+  const useRCS = settings.autoSwap && !isManualTool(toolNumber, settings);
   // For manual mode swap, use a combined message that tells user to remove old and install new
-  const messageCode = settings.autoSwap
+  const messageCode = useRCS
     ? `PLUGIN_RCS:LOAD_MESSAGE_${toolNumber}`
     : (hasUnload ? `PLUGIN_RCS:SWAP_MESSAGE_MANUAL_${toolNumber}` : `PLUGIN_RCS:LOAD_MESSAGE_MANUAL_${toolNumber}`);
 
@@ -231,7 +238,7 @@ function createToolLoad(settings, toolNumber, hasUnload) {
       G53 G0 Z${settings.zSafe}
       G53 G0 X${settings.parking.x} Y${settings.parking.y}`;
 
-  if (settings.autoSwap) {
+  if (useRCS) {
     // RapidChangeSolo ON: Go to manual location, show message, then move to pocket1 to load
     // Insert G65P6 to skip spindle wait when waitForSpindle is disabled
     const g65p6 = settings.waitForSpindle ? '' : 'G65P6';
@@ -278,7 +285,7 @@ function buildUnloadTool(settings, currentTool, targetTool) {
   }
   return `
     (Unload current tool T${currentTool})
-    ${createToolUnload(settings, targetTool)}
+    ${createToolUnload(settings, currentTool, targetTool)}
   `.trim();
 }
 
@@ -347,13 +354,23 @@ async function handleTLSCommand(commands, context, settings, ctx) {
 
   const tlsCommand = commands[tlsIndex];
   const toolLengthSetRoutine = createToolLengthSetRoutine(settings, toolOffsets);
+
+  // Pre/Post event commands (same as M6 tool change)
+  const preToolChangeCmd = settings.preToolChangeGcode?.trim() || '';
+  const postToolChangeCmd = settings.postToolChangeGcode?.trim() || '';
+
   const gcode = `
-         #<return_units> = [20 + #<_metric>]
-        G21
-        ${toolLengthSetRoutine}
-        G[#<return_units>]
-        G90
-    `.trim();
+    (Start of Tool Length Setter)
+    ${preToolChangeCmd}
+    #<return_units> = [20 + #<_metric>]
+    G21
+    ${toolLengthSetRoutine}
+    G53 G0 Z${settings.zSafe}
+    G[#<return_units>]
+    G90
+    ${postToolChangeCmd}
+    (End of Tool Length Setter)
+  `.trim();
   const tlsProgram = formatGCode(gcode);
   const showMacroCommand = settings.showMacroCommand ?? false;
 
@@ -449,15 +466,21 @@ async function handleHomeCommand(commands, context, settings, ctx) {
   const homeCommand = commands[homeIndex];
   const tlsRoutine = createToolLengthSetRoutine(settings, toolOffsets);
 
+  // Pre/Post event commands (only run if TLS runs)
+  const preToolChangeCmd = settings.preToolChangeGcode?.trim() || '';
+  const postToolChangeCmd = settings.postToolChangeGcode?.trim() || '';
+
   const gcode = `
     $H
     #<return_units> = [20 + #<_metric>]
     o100 IF [[#<_tool_offset> EQ 0] AND [#<_current_tool> NE 0]]
+      ${preToolChangeCmd}
       G21
       ${tlsRoutine}
       G53 G0 Z${settings.zSafe}
       G4 P0
       G53 G0 X0 Y0
+      ${postToolChangeCmd}
     o100 ENDIF
     G[#<return_units>]
   `.trim();
