@@ -1,4 +1,5 @@
 ## What's Changed
 
 ### 🐛 Bug Fixes
-- Fixed an issue where manual tool changes were incorrectly intercepted by Rapid Change Solo, ensuring tools outside the standard tool range are now properly bypassed
+- Fixed dialog buttons and messages displaying incorrectly during manual-to-automatic tool change
+- Fixed tool change dialog incorrectly showing swap message after Rapid Change Solo unload
