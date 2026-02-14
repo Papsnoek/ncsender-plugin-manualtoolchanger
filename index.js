@@ -227,12 +227,13 @@ function createToolUnload(settings, currentTool, targetTool) {
 
 // Helper: Tool load routine
 function createToolLoad(settings, toolNumber, hasUnload, currentTool) {
-  const useRCS = settings.autoSwap && !isManualTool(toolNumber, settings);
   // Only use swap message when the unload was also manual (user had to remove the bit by hand)
   // If unload was via RCS, the bit is already removed automatically
   const wasManualUnload = hasUnload && isManualTool(currentTool, settings);
+  // Use RCS load when target tool is within magazine size (even if previous was manual)
+  const useRCS = settings.autoSwap && !isManualTool(toolNumber, settings);
   const messageCode = useRCS
-    ? `PLUGIN_RCS:LOAD_MESSAGE_${toolNumber}`
+    ? (wasManualUnload ? `PLUGIN_RCS:LOAD_AFTER_MANUAL_MESSAGE_${toolNumber}` : `PLUGIN_RCS:LOAD_MESSAGE_${toolNumber}`)
     : (wasManualUnload ? `PLUGIN_RCS:SWAP_MESSAGE_MANUAL_${toolNumber}` : `PLUGIN_RCS:LOAD_MESSAGE_MANUAL_${toolNumber}`);
 
   // If no unload happened, we need to move to manual location first
@@ -513,7 +514,22 @@ async function handleHomeCommand(commands, context, settings, ctx) {
 // Show safety warning dialog
 function showSafetyWarningDialog(ctx, title, message, continueLabel, abortEventGcode = '') {
   const abortGcodeLines = abortEventGcode ? abortEventGcode.trim().split('\\n').filter(line => line.trim()) : [];
-  const abortGcodeJson = JSON.stringify(abortGcodeLines);
+  const abortGcodeAttr = JSON.stringify(abortGcodeLines).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+  // All button logic is inline in onclick — no <script> tag needed.
+  // This avoids issues with v-html not executing scripts or executeScripts() timing.
+  const abortOnclick = [
+    "var g=JSON.parse(this.getAttribute('data-gcode'));",
+    "g.forEach(function(l){window.postMessage({type:'send-command',command:l,displayCommand:l},'*')});",
+    "window.postMessage({type:'send-command',command:String.fromCharCode(24),displayCommand:String.fromCharCode(24)+' (Soft Reset)'},'*');",
+    "window.postMessage({type:'send-command',command:'$NCSENDER_CLEAR_MSG',displayCommand:'$NCSENDER_CLEAR_MSG'},'*')"
+  ].join('');
+
+  const continueOnclick = [
+    "window.postMessage({type:'send-command',command:'~',displayCommand:'~ (Cycle Start)'},'*');",
+    "window.postMessage({type:'send-command',command:'$NCSENDER_CLEAR_MSG',displayCommand:'$NCSENDER_CLEAR_MSG'},'*')"
+  ].join('');
+
   ctx.showModal(
     /* html */ `
       <style>
@@ -591,67 +607,11 @@ function showSafetyWarningDialog(ctx, title, message, continueLabel, abortEventG
         <div class="rcs-safety-dialog">
           <div class="rcs-safety-message">${message}</div>
           <div class="rcs-safety-actions">
-            <button class="rcs-action-button rcs-button-abort" id="rcs-abort-btn">Abort</button>
-            <button class="rcs-action-button rcs-button-continue" id="rcs-continue-btn">${continueLabel}</button>
+            <button class="rcs-action-button rcs-button-abort" data-gcode="${abortGcodeAttr}" onclick="${abortOnclick}">Abort</button>
+            <button class="rcs-action-button rcs-button-continue" onclick="${continueOnclick}">${continueLabel}</button>
           </div>
         </div>
       </div>
-
-      <script>
-        (function() {
-          const abortBtn = document.getElementById('rcs-abort-btn');
-          const continueBtn = document.getElementById('rcs-continue-btn');
-          const abortGcodeLines = ${abortGcodeJson};
-
-          abortBtn.addEventListener('click', function() {
-            if (abortBtn.disabled) return;
-            abortBtn.disabled = true;
-            continueBtn.disabled = true;
-
-            // Execute abort event G-code first if configured
-            if (abortGcodeLines.length > 0) {
-              abortGcodeLines.forEach(function(line) {
-                window.postMessage({
-                  type: 'send-command',
-                  command: line,
-                  displayCommand: line
-                }, '*');
-              });
-            }
-
-            // Then send soft reset to stop everything
-            window.postMessage({
-              type: 'send-command',
-              command: '\\x18',
-              displayCommand: '\\x18 (Soft Reset)'
-            }, '*');
-
-            window.postMessage({
-              type: 'send-command',
-              command: '$NCSENDER_CLEAR_MSG',
-              displayCommand: '$NCSENDER_CLEAR_MSG'
-            }, '*');
-          });
-
-          continueBtn.addEventListener('click', function() {
-            if (continueBtn.disabled) return;
-            abortBtn.disabled = true;
-            continueBtn.disabled = true;
-
-            window.postMessage({
-              type: 'send-command',
-              command: '~',
-              displayCommand: '~ (Cycle Start)'
-            }, '*');
-
-            window.postMessage({
-              type: 'send-command',
-              command: '$NCSENDER_CLEAR_MSG',
-              displayCommand: '$NCSENDER_CLEAR_MSG'
-            }, '*');
-          });
-        })();
-      </script>
     `,
     { closable: false }
   );
@@ -774,6 +734,11 @@ export async function onLoad(ctx) {
     'PLUGIN_RCS:LOAD_MESSAGE': {
       title: 'Loading',
       message: 'Confirm {toolNumber} is placed securely in the pocket and keep hands clear. The spindle will descend to pick up the tool during the load process. Click <em>"Continue"</em> to proceed or <em>"Abort"</em> to cancel.',
+      continueLabel: 'Continue'
+    },
+    'PLUGIN_RCS:LOAD_AFTER_MANUAL_MESSAGE': {
+      title: 'Tool Change',
+      message: 'Please remove the current bit and confirm {toolNumber} is placed securely in the pocket. Keep hands clear — the spindle will descend to pick up the tool. Click <em>"Continue"</em> to proceed or <em>"Abort"</em> to cancel.',
       continueLabel: 'Continue'
     },
     'PLUGIN_RCS:UNLOAD_MESSAGE': {
