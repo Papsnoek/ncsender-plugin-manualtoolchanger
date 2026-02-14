@@ -226,12 +226,14 @@ function createToolUnload(settings, currentTool, targetTool) {
 }
 
 // Helper: Tool load routine
-function createToolLoad(settings, toolNumber, hasUnload) {
+function createToolLoad(settings, toolNumber, hasUnload, currentTool) {
   const useRCS = settings.autoSwap && !isManualTool(toolNumber, settings);
-  // For manual mode swap, use a combined message that tells user to remove old and install new
+  // Only use swap message when the unload was also manual (user had to remove the bit by hand)
+  // If unload was via RCS, the bit is already removed automatically
+  const wasManualUnload = hasUnload && isManualTool(currentTool, settings);
   const messageCode = useRCS
     ? `PLUGIN_RCS:LOAD_MESSAGE_${toolNumber}`
-    : (hasUnload ? `PLUGIN_RCS:SWAP_MESSAGE_MANUAL_${toolNumber}` : `PLUGIN_RCS:LOAD_MESSAGE_MANUAL_${toolNumber}`);
+    : (wasManualUnload ? `PLUGIN_RCS:SWAP_MESSAGE_MANUAL_${toolNumber}` : `PLUGIN_RCS:LOAD_MESSAGE_MANUAL_${toolNumber}`);
 
   // If no unload happened, we need to move to manual location first
   const moveToManualLocation = hasUnload ? '' : `
@@ -290,13 +292,13 @@ function buildUnloadTool(settings, currentTool, targetTool) {
 }
 
 // Build load tool section
-function buildLoadTool(settings, toolNumber, tlsRoutine, hasUnload) {
+function buildLoadTool(settings, toolNumber, tlsRoutine, hasUnload, currentTool) {
   if (toolNumber === 0) {
     return '';
   }
   return `
     (Load new tool T${toolNumber})
-    ${createToolLoad(settings, toolNumber, hasUnload)}
+    ${createToolLoad(settings, toolNumber, hasUnload, currentTool)}
     ${tlsRoutine}
   `.trim();
 }
@@ -308,7 +310,7 @@ function buildToolChangeProgram(settings, currentTool, toolNumber, toolOffsets =
 
   // Build sections
   const unloadSection = buildUnloadTool(settings, currentTool, toolNumber);
-  const loadSection = buildLoadTool(settings, toolNumber, tlsRoutine, hasUnload);
+  const loadSection = buildLoadTool(settings, toolNumber, tlsRoutine, hasUnload, currentTool);
 
   // Tool change event commands
   const preToolChangeCmd = settings.preToolChangeGcode?.trim() || '';
