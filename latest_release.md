@@ -1,4 +1,4 @@
 ## What's Changed
 
-### 🔧 Improvements
-- Improved tooltip help text with clearer setup instructions for easier configuration
+### 🐛 Bug Fixes
+- Fixed an issue where manual tool changes were incorrectly intercepted by Rapid Change Solo, ensuring tools outside the standard tool range are now properly bypassed
