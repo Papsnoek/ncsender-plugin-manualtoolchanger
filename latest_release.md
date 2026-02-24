@@ -1,5 +1,7 @@
 ## What's Changed
 
+### ✨ New Features
+- Added standalone configuration page for V2 plugin settings
+
 ### 🐛 Bug Fixes
-- Fixed dialog buttons and messages displaying incorrectly during manual-to-automatic tool change
-- Fixed tool change dialog incorrectly showing swap message after Rapid Change Solo unload
+- Fixed message handling for tool change dialogs in V2 plugins
