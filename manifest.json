@@ -1,13 +1,57 @@
 {
   "id": "com.ncsender.manualtoolchange",
-  "name": "Manual ToolChanger",
-  "version": "0.1.30",
+  "name": "Manual Tool Changer",
+  "version": "0.1.31",
   "minAppVersion": "0.3.111",
   "entry": "index.js",
+  "commands": "commands.js",
+  "configUi": "config.html",
   "author": "ncSender",
   "description": "Manual tool change workflow with Tool Length Setter (TLS) support.",
   "category": "tool-changer",
   "repository": "https://github.com/siganberg/ncsender-plugin-manualtoolchanger",
   "priority": 50,
-  "icon": "logo.png"
+  "icon": "logo.png",
+  "platforms": {
+    "v1": "0.3.111",
+    "pro-v1": "0.3.111",
+    "pro-v2": "2.0.0"
+  },
+  "events": ["onBeforeCommand"],
+  "permissions": ["gcode.modify"],
+  "toolMenu": [
+    { "id": "open-config", "label": "Manual Tool Changer", "icon": "logo.png", "clientOnly": true }
+  ],
+  "messages": {
+    "LOAD_MESSAGE_MANUAL": {
+      "title": "Loading",
+      "message": "Please install {toolNumber} securely, then click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "continueLabel": "Continue"
+    },
+    "UNLOAD_MESSAGE_MANUAL": {
+      "title": "Unloading",
+      "message": "Please remove the current bit, then click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "continueLabel": "Continue"
+    },
+    "SWAP_MESSAGE_MANUAL": {
+      "title": "Tool Change",
+      "message": "Please remove the current bit and install {toolNumber} securely, then click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "continueLabel": "Continue"
+    },
+    "LOAD_MESSAGE": {
+      "title": "Loading",
+      "message": "Confirm {toolNumber} is placed securely in the pocket and keep hands clear. Click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "continueLabel": "Continue"
+    },
+    "LOAD_AFTER_MANUAL_MESSAGE": {
+      "title": "Tool Change",
+      "message": "Remove the current bit and confirm {toolNumber} is placed securely in the pocket. Keep hands clear. Click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "continueLabel": "Continue"
+    },
+    "UNLOAD_MESSAGE": {
+      "title": "Unloading",
+      "message": "Ensure the pocket is empty and keep hands clear. Click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "continueLabel": "Continue"
+    }
+  }
 }
