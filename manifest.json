@@ -1,7 +1,7 @@
 {
   "id": "com.ncsender.manualtoolchange",
   "name": "Manual Tool Changer",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "minAppVersion": "0.3.111",
   "entry": "index.js",
   "commands": "commands.js",
