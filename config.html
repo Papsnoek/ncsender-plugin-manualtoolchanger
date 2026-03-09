@@ -1097,7 +1097,13 @@
     }
 
     const getInput = (id) => document.getElementById(id);
-    const formatCoordinate = (value) => (Number.isFinite(value) ? value.toFixed(3) : '0.000');
+    let UNITS_PREFERENCE = 'metric';
+    const MM_PER_INCH = 25.4;
+    const formatCoordinate = (value) => {
+      if (!Number.isFinite(value)) return '0.000';
+      if (UNITS_PREFERENCE === 'imperial') return (value / MM_PER_INCH).toFixed(4);
+      return value.toFixed(3);
+    };
 
     const parseCoordinateString = (raw) => {
       if (typeof raw === 'string' && raw.length > 0) {
@@ -1660,7 +1666,11 @@
     registerButton(TOOLSETTER_PREFIX, 'rcs-toolsetter-grab');
     registerButton(PARKING_PREFIX, 'rcs-parking-grab');
 
-    fetchInitialCoordinates();
+    fetch(BASE_URL + '/api/settings')
+      .then(r => r.ok ? r.json() : {})
+      .then(s => { UNITS_PREFERENCE = s.unitsPreference || 'metric'; })
+      .catch(() => {})
+      .finally(() => { fetchInitialCoordinates(); });
     populateAuxOutputs();
   })();
 </script>
