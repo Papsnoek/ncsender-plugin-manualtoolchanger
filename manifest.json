@@ -1,9 +1,8 @@
 {
   "id": "com.ncsender.manualtoolchange",
   "name": "Manual Tool Changer",
-  "version": "0.1.34",
+  "version": "0.1.35",
   "minAppVersion": "2.0.0",
-  "entry": "index.js",
   "commands": "commands.js",
   "configUi": "config.html",
   "author": "ncSender",
@@ -13,8 +12,6 @@
   "priority": 50,
   "icon": "logo.png",
   "platforms": {
-    "v1": "0.3.111",
-    "pro-v1": "0.3.111",
     "pro-v2": "2.0.0"
   },
   "events": ["onBeforeCommand"],
@@ -51,6 +48,16 @@
     "UNLOAD_MESSAGE": {
       "title": "Unloading",
       "message": "Ensure the pocket is empty and keep hands clear. Click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "continueLabel": "Continue"
+    },
+    "MANUAL_LOAD_PROBE": {
+      "title": "Load Probe",
+      "message": "Please install the probe tool securely, then click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "continueLabel": "Continue"
+    },
+    "MANUAL_UNLOAD_PROBE": {
+      "title": "Unload Probe",
+      "message": "Please remove the probe tool, then click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
       "continueLabel": "Continue"
     }
   }
