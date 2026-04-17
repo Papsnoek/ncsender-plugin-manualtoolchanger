@@ -20,6 +20,10 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+// === Constants ===
+
+const PROBE_TOOL_NUMBER = 99;
+
 // === M6 Pattern Matching (inlined from gcode-patterns.js) ===
 
 const M6_PATTERN = /(?:^|[^A-Z])M0*6(?:\s*T0*(\d+)|(?=[^0-9T])|$)|(?:^|[^A-Z])T0*(\d+)\s*M0*6(?:[^0-9]|$)/i;
@@ -106,6 +110,11 @@ const buildInitialConfig = (raw = {}) => ({
   tlsAuxOutput: raw.tlsAuxOutput === 'M7' || raw.tlsAuxOutput === 'M8'
     ? raw.tlsAuxOutput
     : toFiniteNumber(raw.tlsAuxOutput, -1),
+
+  // Probe Tool Settings
+  addProbe: raw.addProbe ?? false,
+  probeLoadGcode: raw.probeLoadGcode ?? '',
+  probeUnloadGcode: raw.probeUnloadGcode ?? '',
 
   // Tool Change Events
   preToolChangeGcode: raw.preToolChangeGcode ?? '',
@@ -288,6 +297,30 @@ function buildUnloadTool(settings, currentTool, targetTool) {
   if (currentTool === 0) {
     return '';
   }
+
+  if (currentTool === PROBE_TOOL_NUMBER) {
+    const probeUnloadGcode = settings.probeUnloadGcode?.trim() || '';
+    if (probeUnloadGcode) {
+      return `
+        (Unload Probe Tool T${PROBE_TOOL_NUMBER})
+        G53 G0 Z${settings.zSafe}
+        ${probeUnloadGcode}
+        M61 Q0
+      `.trim();
+    } else {
+      return `
+        (Unload Probe Tool T${PROBE_TOOL_NUMBER})
+        G53 G0 Z${settings.zSafe}
+        G53 G0 X${settings.parking.x} Y${settings.parking.y}
+        G53 G0 Z0
+        G4 P0
+        (MSG, PLUGIN_MANUALTOOLCHANGE:MANUAL_UNLOAD_PROBE)
+        M0
+        M61 Q0
+      `.trim();
+    }
+  }
+
   return `
     (Unload current tool T${currentTool})
     ${createToolUnload(settings, currentTool, targetTool)}
@@ -298,6 +331,32 @@ function buildLoadTool(settings, toolNumber, tlsRoutine, hasUnload, currentTool)
   if (toolNumber === 0) {
     return '';
   }
+
+  if (toolNumber === PROBE_TOOL_NUMBER) {
+    const probeLoadGcode = settings.probeLoadGcode?.trim() || '';
+    if (probeLoadGcode) {
+      return `
+        (Load Probe Tool T${PROBE_TOOL_NUMBER})
+        G53 G0 Z${settings.zSafe}
+        M61 Q${PROBE_TOOL_NUMBER}
+        ${probeLoadGcode}
+        ${tlsRoutine}
+      `.trim();
+    } else {
+      return `
+        (Load Probe Tool T${PROBE_TOOL_NUMBER})
+        G53 G0 Z${settings.zSafe}
+        G53 G0 X${settings.parking.x} Y${settings.parking.y}
+        G53 G0 Z0
+        G4 P0
+        (MSG, PLUGIN_MANUALTOOLCHANGE:MANUAL_LOAD_PROBE)
+        M0
+        M61 Q${PROBE_TOOL_NUMBER}
+        ${tlsRoutine}
+      `.trim();
+    }
+  }
+
   return `
     (Load new tool T${toolNumber})
     ${createToolLoad(settings, toolNumber, hasUnload, currentTool)}
@@ -534,6 +593,11 @@ function handleM6Command(commands, context, settings) {
 // === Main Entry Point ===
 
 function onBeforeCommand(commands, context, settings) {
+  // Use core app's safe Z height setting, fallback to 0 (machine Z0)
+  if (context && context.safeZHeight !== undefined) {
+    settings.zSafe = context.safeZHeight;
+  }
+
   handleHomeCommand(commands, context, settings);
   handleTLSCommand(commands, context, settings);
   handlePocket1Command(commands, settings);
@@ -541,4 +605,3 @@ function onBeforeCommand(commands, context, settings) {
   return commands;
 }
 
-export { onBeforeCommand, buildInitialConfig };
