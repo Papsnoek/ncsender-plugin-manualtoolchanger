@@ -27,7 +27,7 @@
     },
     "UNLOAD_MESSAGE_MANUAL": {
       "title": "Unloading",
-      "message": "Please remove the current bit, then click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
+      "message": "Please remove {toolNumber}, then click <em>\"Continue\"</em> to proceed or <em>\"Abort\"</em> to cancel.",
       "continueLabel": "Continue"
     },
     "SWAP_MESSAGE_MANUAL": {

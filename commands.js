@@ -195,7 +195,7 @@ function isManualTool(toolNumber, settings) {
 
 function createToolUnload(settings, currentTool, targetTool) {
   const useRCS = settings.autoSwap && !isManualTool(currentTool, settings);
-  const messageCode = useRCS ? 'PLUGIN_MANUALTOOLCHANGE:UNLOAD_MESSAGE' : 'PLUGIN_MANUALTOOLCHANGE:UNLOAD_MESSAGE_MANUAL';
+  const messageCode = useRCS ? `PLUGIN_MANUALTOOLCHANGE:UNLOAD_MESSAGE_${currentTool}` : `PLUGIN_MANUALTOOLCHANGE:UNLOAD_MESSAGE_MANUAL_${currentTool}`;
   const needsPause = settings.pauseBeforeUnload;
   const confirmationLines = needsPause ? `
     G4 P0
@@ -314,7 +314,7 @@ function buildUnloadTool(settings, currentTool, targetTool) {
         G53 G0 X${settings.parking.x} Y${settings.parking.y}
         G53 G0 Z0
         G4 P0
-        (MSG, PLUGIN_MANUALTOOLCHANGE:MANUAL_UNLOAD_PROBE)
+        (MSG, PLUGIN_MANUALTOOLCHANGE:MANUAL_UNLOAD_PROBE_${PROBE_TOOL_NUMBER})
         M0
         M61 Q0
       `.trim();
@@ -349,7 +349,7 @@ function buildLoadTool(settings, toolNumber, tlsRoutine, hasUnload, currentTool)
         G53 G0 X${settings.parking.x} Y${settings.parking.y}
         G53 G0 Z0
         G4 P0
-        (MSG, PLUGIN_MANUALTOOLCHANGE:MANUAL_LOAD_PROBE)
+        (MSG, PLUGIN_MANUALTOOLCHANGE:MANUAL_LOAD_PROBE_${PROBE_TOOL_NUMBER})
         M0
         M61 Q${PROBE_TOOL_NUMBER}
         ${tlsRoutine}
