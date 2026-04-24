@@ -931,6 +931,33 @@
                 </div>
               </div>
 
+              <div class="rcs-toggle-row" id="rcs-legacy-probe-row">
+                <span class="rcs-toggle-label">Use Legacy Tool Probe Method</span>
+                <div class="rcs-tooltip-wrapper">
+                  <span class="rcs-tooltip-trigger" tabindex="0">?</span>
+                  <div class="rcs-tooltip-content rcs-tooltip-left">Enable to use older Probe method when performing the TLS of the Probe. This will only use G38.2 Probing with a second slower Probe for accuracy.</div>
+                </div>
+                <div class="rcs-toggle-switch" id="rcs-legacy-probe">
+                  <div class="rcs-toggle-switch-knob"></div>
+                </div>
+              </div>
+              <div class="rcs-form-group-horizontal" id="rcs-second-seek-distance-row">
+                <label class="rcs-form-label">Second Seek Distance (mm)</label>
+                <div class="rcs-tooltip-wrapper">
+                  <span class="rcs-tooltip-trigger" tabindex="0">?</span>
+                  <div class="rcs-tooltip-content rcs-tooltip-left">Distance to pull away from TLS to perform the second slower more accurate Probe.</div>
+                </div>
+                <input type="number" class="rcs-input" id="rcs-second-seek-distance" value="1" step="0.5" min="0.5">
+              </div>
+              <div class="rcs-form-group-horizontal" id="rcs-second-seek-feedrate-row">
+                <label class="rcs-form-label">Second Seek Feedrate (mm/min)</label>
+                <div class="rcs-tooltip-wrapper">
+                  <span class="rcs-tooltip-trigger" tabindex="0">?</span>
+                  <div class="rcs-tooltip-content rcs-tooltip-left">Speed at which the tool moves downward during second probing. Use a Lower value than your initial Seek Feedrate.</div>
+                </div>
+                <input type="number" class="rcs-input" id="rcs-second-seek-feedrate" value="25" step="5" min="5">
+              </div>
+
               <div id="rcs-probe-gcode-fields" class="rcs-form-group-vertical" style="gap: 8px; flex: 1; display: flex; flex-direction: column;">
                 <div style="display: flex; flex-direction: column; flex: 1;">
                   <label class="rcs-form-label" style="text-align: left;">Load Probe G-code</label>
@@ -980,6 +1007,7 @@
 <script>
   (function() {
     const FALLBACK_PORT = __SERVER_PORT__;
+    const initialConfig = __INITIAL_CONFIG__;
     const BASE_URL = '';
     const POCKET_PREFIX = 'pocket1';
     const TOOLSETTER_PREFIX = 'toolsetter';
@@ -999,41 +1027,6 @@
         z: toFiniteNumber(coords.z)
       };
     };
-    var buildInitialConfig = function(raw) {
-      raw = raw || {};
-      return {
-        pocket1: sanitizeCoords(raw.pocket1),
-        toolSetter: sanitizeCoords(raw.toolSetter),
-        parking: sanitizeCoords(raw.parking),
-        numberOfTools: toFiniteNumber(raw.numberOfTools, 1),
-        autoSwap: raw.autoSwap === true,
-        pauseBeforeUnload: raw.pauseBeforeUnload !== false,
-        showMacroCommand: raw.showMacroCommand || false,
-        performTlsAfterHome: raw.performTlsAfterHome || false,
-        waitForSpindle: raw.waitForSpindle !== false,
-        zEngagement: toFiniteNumber(raw.zEngagement, -50),
-        zSafe: toFiniteNumber(raw.zSafe, 0),
-        zSpinOff: toFiniteNumber(raw.zSpinOff, 23),
-        zRetreat: toFiniteNumber(raw.zRetreat, 12),
-        unloadRpm: toFiniteNumber(raw.unloadRpm, 1500),
-        loadRpm: toFiniteNumber(raw.loadRpm, 1200),
-        engageFeedrate: toFiniteNumber(raw.engageFeedrate, 3500),
-        zProbeStart: toFiniteNumber(raw.zProbeStart, -10),
-        seekDistance: toFiniteNumber(raw.seekDistance, 50),
-        seekFeedrate: toFiniteNumber(raw.seekFeedrate, 100),
-        tlsAuxOutput: raw.tlsAuxOutput === 'M7' || raw.tlsAuxOutput === 'M8'
-          ? raw.tlsAuxOutput
-          : toFiniteNumber(raw.tlsAuxOutput, -1),
-        addProbe: raw.addProbe ?? false,
-        probeLoadGcode: raw.probeLoadGcode ?? '',
-        probeUnloadGcode: raw.probeUnloadGcode ?? '',
-        preToolChangeGcode: raw.preToolChangeGcode || '',
-        postToolChangeGcode: raw.postToolChangeGcode || '',
-        abortEventGcode: raw.abortEventGcode || ''
-      };
-    };
-
-    const initialConfig = buildInitialConfig(__INITIAL_CONFIG__);
 
     // Monaco editor instances
     let preToolChangeEditor = null;
@@ -1256,6 +1249,8 @@
       getInput('rcs-unload-rpm').value = initialConfig.unloadRpm || 1500;
       getInput('rcs-load-rpm').value = initialConfig.loadRpm || 1200;
       getInput('rcs-z-retreat').value = initialConfig.zRetreat || 12;
+      getInput('rcs-second-seek-distance').value = initialConfig.secondSeekDistance || 1;
+      getInput('rcs-second-seek-feedrate').value = initialConfig.secondSeekFeedrate || 25;
 
       const autoSwapToggle = document.getElementById('rcs-autoswap-toggle');
       if (autoSwapToggle) {
@@ -1311,18 +1306,34 @@
         }
       }
 
+      const legacyProbeToggle = document.getElementById('rcs-legacy-probe');
+      if (legacyProbeToggle) {
+        if (initialConfig.legacyProbe) {
+          legacyProbeToggle.classList.add('active');
+        } else {
+          legacyProbeToggle.classList.remove('active');
+        }
+      }
+
       // tlsAuxOutput is set after dropdown is populated
     };
 
     var updateProbeGcodeState = function() {
       var addProbeToggle = document.getElementById('rcs-add-probe');
+      var legacyProbeToggle = document.getElementById('rcs-legacy-probe');
+      var secondSeekDistanceRow = document.getElementById('rcs-second-seek-distance-row');
+      var secondSeekFeedrateRow = document.getElementById('rcs-second-seek-feedrate-row');
       var probeGcodeFields = document.getElementById('rcs-probe-gcode-fields');
       var loadEditorContainer = document.getElementById('rcs-probe-load-gcode-editor');
       var unloadEditorContainer = document.getElementById('rcs-probe-unload-gcode-editor');
 
+      const secondSeekDistance = getInput('rcs-second-seek-distance');
+      const secondSeekFeedrate = getInput('rcs-second-seek-feedrate');
+
       if (!addProbeToggle || !probeGcodeFields) return;
 
       const isEnabled = addProbeToggle && addProbeToggle.classList.contains('active');
+      const isLegacy = legacyProbeToggle && legacyProbeToggle.classList.contains('active');
       
       if (isEnabled) {
         probeGcodeFields.classList.remove('disabled');
@@ -1337,6 +1348,18 @@
         if (probeLoadEditor) probeLoadEditor.updateOptions({ readOnly: true });
         if (probeUnloadEditor) probeUnloadEditor.updateOptions({ readOnly: true });
       }
+
+      if (isLegacy) {
+        secondSeekDistanceRow.classList.remove('disabled');
+        secondSeekFeedrateRow.classList.remove('disabled');
+      } else {
+        secondSeekDistanceRow.classList.add('disabled');
+        secondSeekFeedrateRow.classList.add('disabled');
+      }
+
+      [secondSeekDistance, secondSeekFeedrate].forEach(el => {
+        if (el) el.disabled = !isLegacy;
+      });
     };
 
     const grabCoordinates = async (prefix) => {
@@ -1393,6 +1416,7 @@
       const showMacroCommandToggle = document.getElementById('rcs-show-macro-command-toggle');
       const performTlsAfterHomeToggle = document.getElementById('rcs-perform-tls-after-home-toggle');
       const addProbeToggle = document.getElementById('rcs-add-probe');
+      const legacyProbeToggle = document.getElementById('rcs-legacy-probe');
 
       return {
         pocket1: {
@@ -1423,6 +1447,9 @@
         addProbe: addProbeToggle ? addProbeToggle.classList.contains('active') : false,
         probeLoadGcode: probeLoadEditor ? probeLoadEditor.getValue() : '',
         probeUnloadGcode: probeUnloadEditor ? probeUnloadEditor.getValue() : '',
+        legacyProbe: legacyProbeToggle ? legacyProbeToggle.classList.contains('active') : false,
+        secondSeekDistance: parseFloat(getInput('rcs-second-seek-distance').value) || 1,
+        secondSeekFeedrate: parseFloat(getInput('rcs-second-seek-feedrate').value) || 25,
         tlsAuxOutput: (() => {
           const val = getInput('rcs-tls-aux-output').value;
           if (val === 'M7' || val === 'M8') return val;
@@ -1760,6 +1787,14 @@
     if (addProbeToggle) {
       addProbeToggle.addEventListener('click', function() {
         addProbeToggle.classList.toggle('active');
+        updateProbeGcodeState();
+      });
+    }
+
+    const legacyProbeToggle = document.getElementById('rcs-legacy-probe');
+    if (legacyProbeToggle) {
+      legacyProbeToggle.addEventListener('click', function() {
+        legacyProbeToggle.classList.toggle('active');
         updateProbeGcodeState();
       });
     }
