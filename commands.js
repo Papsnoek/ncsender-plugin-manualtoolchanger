@@ -628,5 +628,3 @@ function onBeforeCommand(commands, context, settings) {
   handleM6Command(commands, context, settings);
   return commands;
 }
-
-export { onBeforeCommand, buildInitialConfig };
