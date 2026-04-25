@@ -73,54 +73,60 @@ const sanitizeCoords = (coords = {}) => ({
   z: toFiniteNumber(coords.z)
 });
 
-const buildInitialConfig = (raw = {}) => ({
-  // Position Settings
-  pocket1: sanitizeCoords(raw.pocket1),
-  toolSetter: sanitizeCoords(raw.toolSetter),
-  parking: sanitizeCoords(raw.parking),
+const buildInitialConfig = (raw = {}) => {
+  
+  return {
+    // Position Settings
+    pocket1: sanitizeCoords(raw.pocket1),
+    toolSetter: sanitizeCoords(raw.toolSetter),
+    parking: sanitizeCoords(raw.parking),
 
-  // Tool Settings
-  numberOfTools: toFiniteNumber(raw.numberOfTools, 1),
+    // Tool Settings
+    numberOfTools: toFiniteNumber(raw.numberOfTools, 1),
 
-  // UI Toggle Settings
-  autoSwap: raw.autoSwap === true,
-  pauseBeforeUnload: raw.pauseBeforeUnload !== false,
-  showMacroCommand: raw.showMacroCommand ?? false,
-  performTlsAfterHome: raw.performTlsAfterHome ?? false,
-  waitForSpindle: raw.waitForSpindle !== false,
+    // UI Toggle Settings
+    autoSwap: raw.autoSwap === true,
+    pauseBeforeUnload: raw.pauseBeforeUnload !== false,
+    showMacroCommand: raw.showMacroCommand ?? false,
+    performTlsAfterHome: raw.performTlsAfterHome ?? false,
+    waitForSpindle: raw.waitForSpindle !== false,
 
-  // Advanced Settings (no UI, JSON only)
-  // Z-axis Settings
-  zEngagement: toFiniteNumber(raw.zEngagement, -50),
-  zSafe: toFiniteNumber(raw.zSafe, 0),
-  zSpinOff: toFiniteNumber(raw.zSpinOff, 23),
-  zRetreat: toFiniteNumber(raw.zRetreat, 12),
+    // Advanced Settings (no UI, JSON only)
+    // Z-axis Settings
+    zEngagement: toFiniteNumber(raw.zEngagement, -50),
+    zSafe: toFiniteNumber(raw.zSafe, 0),
+    zSpinOff: toFiniteNumber(raw.zSpinOff, 23),
+    zRetreat: toFiniteNumber(raw.zRetreat, 12),
 
-  // Tool Change Settings
-  unloadRpm: toFiniteNumber(raw.unloadRpm, 1500),
-  loadRpm: toFiniteNumber(raw.loadRpm, 1200),
-  engageFeedrate: toFiniteNumber(raw.engageFeedrate, 3500),
+    // Tool Change Settings
+    unloadRpm: toFiniteNumber(raw.unloadRpm, 1500),
+    loadRpm: toFiniteNumber(raw.loadRpm, 1200),
+    engageFeedrate: toFiniteNumber(raw.engageFeedrate, 3500),
 
-  // Tool Length Setter Settings
-  zProbeStart: toFiniteNumber(raw.zProbeStart, -10),
-  seekDistance: toFiniteNumber(raw.seekDistance, 50),
-  seekFeedrate: toFiniteNumber(raw.seekFeedrate, 100),
+    // Tool Length Setter Settings
+    zProbeStart: toFiniteNumber(raw.zProbeStart, -10),
+    seekDistance: toFiniteNumber(raw.seekDistance, 50),
+    seekFeedrate: toFiniteNumber(raw.seekFeedrate, 100),
 
-  // Aux Output Settings (-1 = disabled, 0+ = M64 P{n}, 'M7' or 'M8' for coolant)
-  tlsAuxOutput: raw.tlsAuxOutput === 'M7' || raw.tlsAuxOutput === 'M8'
-    ? raw.tlsAuxOutput
-    : toFiniteNumber(raw.tlsAuxOutput, -1),
+    // Aux Output Settings (-1 = disabled, 0+ = M64 P{n}, 'M7' or 'M8' for coolant)
+    tlsAuxOutput: raw.tlsAuxOutput === 'M7' || raw.tlsAuxOutput === 'M8'
+      ? raw.tlsAuxOutput
+      : toFiniteNumber(raw.tlsAuxOutput, -1),
 
-  // Probe Tool Settings
-  addProbe: raw.addProbe ?? false,
-  probeLoadGcode: raw.probeLoadGcode ?? '',
-  probeUnloadGcode: raw.probeUnloadGcode ?? '',
+    // Probe Tool Settings
+    addProbe: raw.addProbe ?? false,
+    probeLoadGcode: raw.probeLoadGcode ?? '',
+    probeUnloadGcode: raw.probeUnloadGcode ?? '',
+    legacyProbe: raw.legacyProbe ?? false,
+    secondSeekDistance: toFiniteNumber(raw.secondSeekDistance, 1),
+    secondSeekFeedrate: toFiniteNumber(raw.secondSeekFeedrate, 25),
 
-  // Tool Change Events
-  preToolChangeGcode: raw.preToolChangeGcode ?? '',
-  postToolChangeGcode: raw.postToolChangeGcode ?? '',
-  abortEventGcode: raw.abortEventGcode ?? ''
-});
+    // Tool Change Events
+    preToolChangeGcode: raw.preToolChangeGcode ?? '',
+    postToolChangeGcode: raw.postToolChangeGcode ?? '',
+    abortEventGcode: raw.abortEventGcode ?? ''
+  };
+};
 
 // === Tool Offset Lookup (pure, from pre-fetched array) ===
 
@@ -146,11 +152,12 @@ const formatGCode = (gcode) => {
 
 // === Routine Generators ===
 
-function createToolLengthSetRoutine(settings, toolOffsets = { x: 0, y: 0, z: 0 }) {
+function createToolLengthSetRoutine(settings, toolOffsets = { x: 0, y: 0, z: 0 }, toolNumber) {
   const tlsX = settings.toolSetter.x + (toolOffsets.x || 0);
   const tlsY = settings.toolSetter.y + (toolOffsets.y || 0);
   const tlsZ = toolOffsets.z || 0;
   const fineProbeFeedrate = settings.seekFeedrate < 75 ? settings.seekFeedrate : 75;
+  const legacyProbe = settings.legacyProbe;
 
   // Extra Z rapid move for shorter tools (z offset is typically negative)
   const extraZMove = tlsZ !== 0 ? `G91 G0 Z${tlsZ}\n    G90` : '';
@@ -167,6 +174,24 @@ function createToolLengthSetRoutine(settings, toolOffsets = { x: 0, y: 0, z: 0 }
     auxOff = `G4 P0\n    M65 P${auxOutput}\n    G4 P0`;
   }
 
+  let probeCommand = '';
+  if (legacyProbe && toolNumber === PROBE_TOOL_NUMBER) {
+    const secondSeekDistance = settings.secondSeekDistance || 1;
+    const secondSeekFeedrate = settings.secondSeekFeedrate || 25;
+   
+    probeCommand = `
+    G38.2 G91 Z-${settings.seekDistance} F${settings.seekFeedrate}
+    G4 P0.2
+    G0 G91 Z${secondSeekDistance}
+    G4 P0.2
+    G38.2 G91 Z-${secondSeekDistance} F${secondSeekFeedrate}`
+  } else {
+    probeCommand = `
+    G38.2 G91 Z-${settings.seekDistance} F${settings.seekFeedrate}
+    G4 P0.2
+    G38.4 G91 Z5 F${fineProbeFeedrate}`;
+  }
+
   return `
     G53 G0 Z${settings.zSafe}
     G53 G0 X${tlsX} Y${tlsY}
@@ -174,9 +199,7 @@ function createToolLengthSetRoutine(settings, toolOffsets = { x: 0, y: 0, z: 0 }
     ${extraZMove}
     ${auxOn}
     G43.1 Z0
-    G38.2 G91 Z-${settings.seekDistance} F${settings.seekFeedrate}
-    G4 P0.2
-    G38.4 G91 Z5 F${fineProbeFeedrate}
+    ${probeCommand}
     G91 G0 Z5
     G90
     ${auxOff}
@@ -366,7 +389,7 @@ function buildLoadTool(settings, toolNumber, tlsRoutine, hasUnload, currentTool)
 }
 
 function buildToolChangeProgram(settings, currentTool, toolNumber, toolOffsets = { x: 0, y: 0 }) {
-  const tlsRoutine = createToolLengthSetRoutine(settings, toolOffsets);
+  const tlsRoutine = createToolLengthSetRoutine(settings, toolOffsets, toolNumber);
   const hasUnload = currentTool !== 0;
 
   const unloadSection = buildUnloadTool(settings, currentTool, toolNumber);
@@ -408,7 +431,7 @@ function handleTLSCommand(commands, context, settings) {
   const toolOffsets = getToolOffsets(currentTool, context.tools);
 
   const tlsCommand = commands[tlsIndex];
-  const toolLengthSetRoutine = createToolLengthSetRoutine(settings, toolOffsets);
+  const toolLengthSetRoutine = createToolLengthSetRoutine(settings, toolOffsets, currentTool);
 
   const preToolChangeCmd = settings.preToolChangeGcode?.trim() || '';
   const postToolChangeCmd = settings.postToolChangeGcode?.trim() || '';
@@ -503,7 +526,7 @@ function handleHomeCommand(commands, context, settings) {
   const toolOffsets = getToolOffsets(currentTool, context.tools);
 
   const homeCommand = commands[homeIndex];
-  const tlsRoutine = createToolLengthSetRoutine(settings, toolOffsets);
+  const tlsRoutine = createToolLengthSetRoutine(settings, toolOffsets, currentTool);
 
   const preToolChangeCmd = settings.preToolChangeGcode?.trim() || '';
   const postToolChangeCmd = settings.postToolChangeGcode?.trim() || '';
@@ -606,3 +629,4 @@ function onBeforeCommand(commands, context, settings) {
   return commands;
 }
 
+export { onBeforeCommand, buildInitialConfig };
