@@ -146,6 +146,11 @@
     margin-left: auto;
   }
 
+  .rcs-form-group-vertical {
+    display: flex;
+    flex-direction: column;
+  }
+
   .rcs-select {
     padding: 8px 12px;
     padding-right: 24px;
@@ -653,6 +658,9 @@
     <button class="rcs-tab active" data-tab="basic">
       <span class="rcs-tab-label">Basic</span>
     </button>
+    <button class="rcs-tab" data-tab="probe">
+      <span class="rcs-tab-label">Probe</span>
+    </button>
     <button class="rcs-tab" data-tab="events">
       <span class="rcs-tab-label">Events</span>
     </button>
@@ -901,6 +909,43 @@
         </div>
       </div>
 
+      <!-- Probe Tab -->
+      <div class="rcs-tab-panel" id="rcs-tab-probe">
+        <div class="rcs-container">
+          <!-- Left Column -->
+          <div class="rcs-left-column">
+            <div class="rcs-pocket-group">
+              <div class="rcs-pocket-header">
+                <div class="rcs-pocket-header-left">
+                  <span class="rcs-pocket-title">Probe Settings</span>
+                </div>
+              </div>
+              <div class="rcs-toggle-row">
+                <span class="rcs-toggle-label">Enable Probe Tool</span>
+                <div class="rcs-tooltip-wrapper">
+                  <span class="rcs-tooltip-trigger" tabindex="0">?</span>
+                  <div class="rcs-tooltip-content rcs-tooltip-left">Enable probe tool (T99) in the main app.</div>
+                </div>
+                <div class="rcs-toggle-switch" id="rcs-add-probe">
+                  <div class="rcs-toggle-switch-knob"></div>
+                </div>
+              </div>
+
+              <div id="rcs-probe-gcode-fields" class="rcs-form-group-vertical" style="gap: 8px; flex: 1; display: flex; flex-direction: column;">
+                <div style="display: flex; flex-direction: column; flex: 1;">
+                  <label class="rcs-form-label" style="text-align: left;">Load Probe G-code</label>
+                  <div id="rcs-probe-load-gcode-editor" class="rcs-monaco-container"></div>
+                </div>
+                <div style="display: flex; flex-direction: column; flex: 1;">
+                  <label class="rcs-form-label" style="text-align: left;">Unload Probe G-code</label>
+                  <div id="rcs-probe-unload-gcode-editor" class="rcs-monaco-container"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Events Tab -->
       <div class="rcs-tab-panel" id="rcs-tab-events">
         <div class="rcs-events-container">
@@ -979,6 +1024,9 @@
         tlsAuxOutput: raw.tlsAuxOutput === 'M7' || raw.tlsAuxOutput === 'M8'
           ? raw.tlsAuxOutput
           : toFiniteNumber(raw.tlsAuxOutput, -1),
+        addProbe: raw.addProbe ?? false,
+        probeLoadGcode: raw.probeLoadGcode ?? '',
+        probeUnloadGcode: raw.probeUnloadGcode ?? '',
         preToolChangeGcode: raw.preToolChangeGcode || '',
         postToolChangeGcode: raw.postToolChangeGcode || '',
         abortEventGcode: raw.abortEventGcode || ''
@@ -991,6 +1039,8 @@
     let preToolChangeEditor = null;
     let postToolChangeEditor = null;
     let abortEventEditor = null;
+    let probeLoadEditor= null;
+    let probeUnloadEditor = null;
 
     // Tab switching
     const tabs = document.querySelectorAll('.rcs-tab');
@@ -1011,6 +1061,10 @@
           if (preToolChangeEditor) preToolChangeEditor.layout();
           if (postToolChangeEditor) postToolChangeEditor.layout();
           if (abortEventEditor) abortEventEditor.layout();
+        }
+        if (targetTab === 'probe') {
+          if (probeLoadEditor) probeLoadEditor.layout();
+          if (probeUnloadEditor) probeUnloadEditor.layout();
         }
       });
     });
@@ -1087,6 +1141,22 @@
         abortEventEditor = monaco.editor.create(abortEventContainer, {
           ...monacoOptions,
           value: initialConfig.abortEventGcode || ''
+        });
+      }
+
+      const probeLoadContainer = document.getElementById('rcs-probe-load-gcode-editor');
+      if (probeLoadContainer) {
+        probeLoadEditor = monaco.editor.create(probeLoadContainer, {
+          ...monacoOptions,
+          value: initialConfig.probeLoadGcode || ''
+        });
+      }
+
+      const probeUnloadContainer = document.getElementById('rcs-probe-unload-gcode-editor');
+      if (probeUnloadContainer) {
+        probeUnloadEditor = monaco.editor.create(probeUnloadContainer, {
+          ...monacoOptions,
+          value: initialConfig.probeUnloadGcode || ''
         });
       }
 
@@ -1232,7 +1302,41 @@
         }
       }
 
+      const addProbeToggle = document.getElementById('rcs-add-probe');
+      if (addProbeToggle) {
+        if (initialConfig.addProbe) {
+          addProbeToggle.classList.add('active');
+        } else {
+          addProbeToggle.classList.remove('active');
+        }
+      }
+
       // tlsAuxOutput is set after dropdown is populated
+    };
+
+    var updateProbeGcodeState = function() {
+      var addProbeToggle = document.getElementById('rcs-add-probe');
+      var probeGcodeFields = document.getElementById('rcs-probe-gcode-fields');
+      var loadEditorContainer = document.getElementById('rcs-probe-load-gcode-editor');
+      var unloadEditorContainer = document.getElementById('rcs-probe-unload-gcode-editor');
+
+      if (!addProbeToggle || !probeGcodeFields) return;
+
+      const isEnabled = addProbeToggle && addProbeToggle.classList.contains('active');
+      
+      if (isEnabled) {
+        probeGcodeFields.classList.remove('disabled');
+        if (loadEditorContainer) loadEditorContainer.classList.remove('disabled');
+        if (unloadEditorContainer) unloadEditorContainer.classList.remove('disabled');
+        if (probeLoadEditor) probeLoadEditor.updateOptions({ readOnly: false });
+        if (probeUnloadEditor) probeUnloadEditor.updateOptions({ readOnly: false });
+      } else {
+        probeGcodeFields.classList.add('disabled');
+        if (loadEditorContainer) loadEditorContainer.classList.add('disabled');
+        if (unloadEditorContainer) unloadEditorContainer.classList.add('disabled');
+        if (probeLoadEditor) probeLoadEditor.updateOptions({ readOnly: true });
+        if (probeUnloadEditor) probeUnloadEditor.updateOptions({ readOnly: true });
+      }
     };
 
     const grabCoordinates = async (prefix) => {
@@ -1288,6 +1392,7 @@
       const waitForSpindleToggle = document.getElementById('rcs-wait-for-spindle-toggle');
       const showMacroCommandToggle = document.getElementById('rcs-show-macro-command-toggle');
       const performTlsAfterHomeToggle = document.getElementById('rcs-perform-tls-after-home-toggle');
+      const addProbeToggle = document.getElementById('rcs-add-probe');
 
       return {
         pocket1: {
@@ -1315,6 +1420,9 @@
         waitForSpindle: waitForSpindleToggle ? waitForSpindleToggle.classList.contains('active') : true,
         showMacroCommand: showMacroCommandToggle ? showMacroCommandToggle.classList.contains('active') : false,
         performTlsAfterHome: performTlsAfterHomeToggle ? performTlsAfterHomeToggle.classList.contains('active') : false,
+        addProbe: addProbeToggle ? addProbeToggle.classList.contains('active') : false,
+        probeLoadGcode: probeLoadEditor ? probeLoadEditor.getValue() : '',
+        probeUnloadGcode: probeUnloadEditor ? probeUnloadEditor.getValue() : '',
         tlsAuxOutput: (() => {
           const val = getInput('rcs-tls-aux-output').value;
           if (val === 'M7' || val === 'M8') return val;
@@ -1363,7 +1471,8 @@
                 count: payload.numberOfTools || 1,
                 source: 'com.ncsender.manualtoolchange',
                 manual: true,
-                tls: true
+                tls: true,
+                probe: payload.addProbe
               }
             })
           });
@@ -1647,6 +1756,14 @@
       });
     }
 
+    const addProbeToggle = document.getElementById('rcs-add-probe');
+    if (addProbeToggle) {
+      addProbeToggle.addEventListener('click', function() {
+        addProbeToggle.classList.toggle('active');
+        updateProbeGcodeState();
+      });
+    }
+
     window.addEventListener('message', handleServerStateUpdate);
 
     // Populate number of tools dropdown (1-98)
@@ -1661,6 +1778,7 @@
     }
 
     applyInitialSettings();
+    updateProbeGcodeState();
     updateRapidChangeState();
 
     registerButton(POCKET_PREFIX, 'rcs-pocket1-grab');

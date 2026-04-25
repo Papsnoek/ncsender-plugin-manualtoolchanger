@@ -175,6 +175,7 @@ function createToolLengthSetRoutine(settings, toolOffsets = { x: 0, y: 0, z: 0 }
     ${auxOn}
     G43.1 Z0
     G38.2 G91 Z-${settings.seekDistance} F${settings.seekFeedrate}
+    G4 P0.2
     G38.4 G91 Z5 F${fineProbeFeedrate}
     G91 G0 Z5
     G90
